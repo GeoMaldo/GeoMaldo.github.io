@@ -1,17 +1,679 @@
 <!DOCTYPE html>
-<html>
+<html lang="es">
 <head>
-  <title>Escaner de Recibos</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lector de Números de Orden</title>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4.1.1/dist/tesseract.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        body {
+            background: linear-gradient(135deg, #1a2a6c, #b21f1f, #fdbb2d);
+            color: #fff;
+            min-height: 100vh;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+        }
+        
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+        
+        .subtitle {
+            font-size: 1.2rem;
+            opacity: 0.9;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        
+        .app-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .card {
+            background-color: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            flex: 1;
+            min-width: 300px;
+        }
+        
+        .card h2 {
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+            display: flex;
+            align-items: center;
+        }
+        
+        .camera-container {
+            position: relative;
+            width: 100%;
+            height: 0;
+            padding-bottom: 75%;
+            margin-bottom: 20px;
+            border-radius: 10px;
+            overflow: hidden;
+            background-color: #000;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+        }
+        
+        #video {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transform: scaleX(-1); /* Espejo para que se vea natural */
+        }
+        
+        #canvas {
+            display: none;
+        }
+        
+        .captured-image-container {
+            width: 100%;
+            max-height: 300px;
+            overflow: hidden;
+            border-radius: 10px;
+            margin-bottom: 15px;
+            display: none;
+        }
+        
+        #captured-image {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+        
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        
+        button {
+            background: linear-gradient(135deg, #4A00E0 0%, #8E2DE2 100%);
+            color: white;
+            border: none;
+            padding: 15px 20px;
+            border-radius: 50px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            flex: 1;
+            min-width: 160px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        }
+        
+        button:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+        }
+        
+        button:active {
+            transform: translateY(1px);
+        }
+        
+        button:disabled {
+            background: #666;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+            opacity: 0.6;
+        }
+        
+        #start-camera-btn {
+            background: linear-gradient(135deg, #00b09b 0%, #96c93d 100%);
+            font-size: 1.2rem;
+            padding: 18px 20px;
+        }
+        
+        #capture-btn {
+            background: linear-gradient(135deg, #ff7e5f 0%, #feb47b 100%);
+        }
+        
+        #process-btn {
+            background: linear-gradient(135deg, #4A00E0 0%, #8E2DE2 100%);
+        }
+        
+        .result-container {
+            margin-top: 20px;
+        }
+        
+        .result-title {
+            font-size: 1.3rem;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+        }
+        
+        #result {
+            background-color: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 15px;
+            font-size: 1.5rem;
+            font-weight: bold;
+            min-height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            word-break: break-all;
+        }
+        
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
+            margin-right: 10px;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .instructions {
+            margin-top: 30px;
+            font-size: 0.9rem;
+            opacity: 0.8;
+            line-height: 1.5;
+        }
+        
+        .instructions ol {
+            margin-left: 20px;
+            margin-top: 10px;
+        }
+        
+        .instructions li {
+            margin-bottom: 8px;
+        }
+        
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        
+        .data-table th, .data-table td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .data-table th {
+            background: rgba(255, 255, 255, 0.2);
+            font-weight: 600;
+        }
+        
+        .data-table tr:last-child td {
+            border-bottom: none;
+        }
+        
+        footer {
+            text-align: center;
+            margin-top: 40px;
+            font-size: 0.9rem;
+            opacity: 0.7;
+        }
+        
+        .android-warning {
+            background: rgba(255, 165, 0, 0.3);
+            border: 2px solid rgba(255, 165, 0, 0.5);
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        
+        .permission-info {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 15px;
+            font-size: 0.9rem;
+        }
+        
+        .error-message {
+            background: rgba(255, 0, 0, 0.2);
+            border: 1px solid rgba(255, 100, 100, 0.5);
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 15px;
+        }
+        
+        .success-message {
+            background: rgba(0, 255, 0, 0.2);
+            border: 1px solid rgba(100, 255, 100, 0.5);
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 15px;
+        }
+
+        @media (max-width: 768px) {
+            .app-container {
+                flex-direction: column;
+            }
+            
+            h1 {
+                font-size: 2rem;
+            }
+            
+            .card {
+                padding: 15px;
+            }
+            
+            button {
+                flex: 100%;
+                padding: 18px 20px;
+                font-size: 1.1rem;
+            }
+        }
+    </style>
 </head>
 <body>
-  <h3>Escanear recibo</h3>
-  <video id="camera" autoplay></video>
-  <button id="capture">Capturar</button>
-  <canvas id="canvas"></canvas>
-  <pre id="output"></pre>
+    <div class="container">
+        <header>
+            <h1>Lector de Números de Orden</h1>
+            <p class="subtitle">Captura y extrae automáticamente números de orden usando la cámara</p>
+        </header>
+        
+        <div class="android-warning">
+            <p><strong>⚠️ Importante para Android:</strong> Usa Chrome y permite los permisos de cámara cuando se soliciten</p>
+        </div>
+        
+        <div class="app-container">
+            <div class="card">
+                <h2>Cámara</h2>
+                <div class="camera-container">
+                    <video id="video" autoplay playsinline></video>
+                    <canvas id="canvas"></canvas>
+                </div>
+                
+                <div class="captured-image-container">
+                    <img id="captured-image" alt="Imagen capturada">
+                </div>
+                
+                <div class="controls">
+                    <button id="start-camera-btn">🎥 Activar Cámara</button>
+                    <button id="capture-btn" disabled>📸 Capturar Imagen</button>
+                    <button id="process-btn" disabled>🔍 Procesar Imagen</button>
+                    <button id="reset-btn" disabled>🔄 Reiniciar</button>
+                </div>
+                
+                <div class="permission-info">
+                    <p><strong>Nota:</strong> Si la cámara no se activa:</p>
+                    <ul>
+                        <li>Asegúrate de usar Chrome</li>
+                        <li>Permite los permisos de cámara</li>
+                        <li>Verifica que ninguna otra app esté usando la cámara</li>
+                        <li>Recarga la página si es necesario</li>
+                    </ul>
+                </div>
+            </div>
+            
+            <div class="card">
+                <h2>Resultados</h2>
+                <div class="result-container">
+                    <div class="result-title">Número de Orden Detectado:</div>
+                    <div id="result">
+                        <span id="status-message">Haz clic en "Activar Cámara" para comenzar</span>
+                    </div>
+                </div>
+                
+                <div class="extracted-data">
+                    <div class="result-title" style="margin-top: 20px;">Datos Extraídos:</div>
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Campo</th>
+                                <th>Valor</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Número de Orden</td>
+                                <td id="order-number">-</td>
+                            </tr>
+                            <tr>
+                                <td>Fecha</td>
+                                <td id="date-field">-</td>
+                            </tr>
+                            <tr>
+                                <td>Total</td>
+                                <td id="total-field">-</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card instructions">
+            <h2>Instrucciones de uso:</h2>
+            <ol>
+                <li>Haz clic en <strong>"Activar Cámara"</strong> y <strong>permite el acceso</strong> cuando se solicite</li>
+                <li>Apunta la cámara hacia el número de orden que deseas leer</li>
+                <li>Asegúrate de que el número esté bien iluminado y enfocado</li>
+                <li>Haz clic en <strong>"Capturar Imagen"</strong> para tomar una foto</li>
+                <li>Haz clic en <strong>"Procesar Imagen"</strong> para extraer el número</li>
+                <li>Revisa los resultados y si es necesario, haz clic en <strong>"Reiniciar"</strong></li>
+            </ol>
+        </div>
+        
+        <footer>
+            <p>Lector de Números de Orden &copy; 2023 - Usa Tesseract.js para OCR</p>
+        </footer>
+    </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/tesseract.js"></script>
-  <script async src="https://docs.opencv.org/4.x/opencv.js"></script>
-  <script src="script.js"></script>
+    <script>
+        // Elementos del DOM
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const capturedImage = document.getElementById('captured-image');
+        const capturedImageContainer = document.querySelector('.captured-image-container');
+        const startCameraBtn = document.getElementById('start-camera-btn');
+        const captureBtn = document.getElementById('capture-btn');
+        const processBtn = document.getElementById('process-btn');
+        const resetBtn = document.getElementById('reset-btn');
+        const resultDiv = document.getElementById('result');
+        const statusMessage = document.getElementById('status-message');
+        const orderNumberField = document.getElementById('order-number');
+        const dateField = document.getElementById('date-field');
+        const totalField = document.getElementById('total-field');
+        
+        // Variables de estado
+        let stream = null;
+        let capturedImageData = null;
+        
+        // Detectar si es móvil
+        function isMobile() {
+            return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        }
+        
+        // Inicializar la cámara al hacer clic en el botón
+        startCameraBtn.addEventListener('click', async () => {
+            await initializeCamera();
+        });
+        
+        // Función mejorada para inicializar la cámara
+        async function initializeCamera() {
+            try {
+                console.log("Iniciando cámara...");
+                statusMessage.innerHTML = '<span class="loading"></span> Activando cámara...';
+                startCameraBtn.disabled = true;
+                startCameraBtn.textContent = "Activando...";
+                
+                // Detener cualquier stream anterior
+                if (stream) {
+                    stream.getTracks().forEach(track => track.stop());
+                }
+                
+                // Configuración de cámara para móviles
+                const constraints = {
+                    video: {
+                        facingMode: 'environment', // Cámara trasera
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 },
+                        frameRate: { ideal: 30 }
+                    },
+                    audio: false
+                };
+                
+                // Intentar con la configuración ideal primero
+                try {
+                    stream = await navigator.mediaDevices.getUserMedia(constraints);
+                } catch (error) {
+                    console.log("Configuración ideal falló, intentando configuración básica...");
+                    // Configuración de respaldo más básica
+                    stream = await navigator.mediaDevices.getUserMedia({
+                        video: true,
+                        audio: false
+                    });
+                }
+                
+                console.log("Cámara accedida correctamente");
+                video.srcObject = stream;
+                
+                // Esperar a que el video esté listo
+                video.onloadeddata = () => {
+                    console.log("Video cargado y listo");
+                    video.play();
+                    
+                    // Habilitar botones
+                    captureBtn.disabled = false;
+                    startCameraBtn.textContent = "✅ Cámara Activada";
+                    startCameraBtn.style.background = "linear-gradient(135deg, #00b09b 0%, #96c93d 100%)";
+                    
+                    statusMessage.textContent = '✅ Cámara lista. Apunta al número de orden y haz clic en "Capturar Imagen"';
+                    
+                    // Mostrar mensaje de éxito
+                    showMessage('✅ Cámara activada correctamente', 'success');
+                };
+                
+                // Manejar errores del video
+                video.onerror = (error) => {
+                    console.error("Error en video:", error);
+                    showMessage('❌ Error al reproducir el video de la cámara', 'error');
+                    resetCameraButton();
+                };
+                
+            } catch (error) {
+                console.error('Error completo al acceder a la cámara:', error);
+                let errorMsg = '❌ Error: No se pudo acceder a la cámara. ';
+                
+                if (error.name === 'NotAllowedError') {
+                    errorMsg += 'Permiso denegado. Por favor, permite el acceso a la cámara.';
+                } else if (error.name === 'NotFoundError') {
+                    errorMsg += 'No se encontró cámara en el dispositivo.';
+                } else if (error.name === 'NotSupportedError') {
+                    errorMsg += 'El navegador no soporta acceso a cámara.';
+                } else if (error.name === 'NotReadableError') {
+                    errorMsg += 'La cámara está siendo usada por otra aplicación.';
+                } else {
+                    errorMsg += 'Error desconocido: ' + error.message;
+                }
+                
+                statusMessage.textContent = errorMsg;
+                showMessage(errorMsg, 'error');
+                resetCameraButton();
+            }
+        }
+        
+        // Función para mostrar mensajes
+        function showMessage(message, type) {
+            // Remover mensajes anteriores
+            const existingMessages = document.querySelectorAll('.error-message, .success-message');
+            existingMessages.forEach(msg => msg.remove());
+            
+            const messageDiv = document.createElement('div');
+            messageDiv.className = type === 'error' ? 'error-message' : 'success-message';
+            messageDiv.textContent = message;
+            
+            // Insertar después del contenedor de cámara
+            const cameraCard = document.querySelector('.card:first-child');
+            cameraCard.appendChild(messageDiv);
+            
+            // Auto-eliminar después de 5 segundos
+            setTimeout(() => {
+                if (messageDiv.parentNode) {
+                    messageDiv.remove();
+                }
+            }, 5000);
+        }
+        
+        // Reiniciar botón de cámara
+        function resetCameraButton() {
+            startCameraBtn.disabled = false;
+            startCameraBtn.textContent = "🎥 Activar Cámara";
+            startCameraBtn.style.background = "linear-gradient(135deg, #00b09b 0%, #96c93d 100%)";
+        }
+        
+        // Capturar imagen
+        captureBtn.addEventListener('click', () => {
+            if (!stream) {
+                showMessage('❌ Primero activa la cámara', 'error');
+                return;
+            }
+            
+            // Configurar canvas con las dimensiones del video
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            
+            // Dibujar el frame actual del video en el canvas
+            const context = canvas.getContext('2d');
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+            
+            // Obtener la imagen como data URL
+            capturedImageData = canvas.toDataURL('image/png');
+            capturedImage.src = capturedImageData;
+            capturedImageContainer.style.display = 'block';
+            
+            // Habilitar botón de procesar
+            processBtn.disabled = false;
+            resetBtn.disabled = false;
+            
+            statusMessage.textContent = '✅ Imagen capturada. Haz clic en "Procesar Imagen" para extraer el número.';
+            showMessage('✅ Imagen capturada correctamente', 'success');
+        });
+        
+        // Procesar imagen con OCR
+        processBtn.addEventListener('click', async () => {
+            if (!capturedImageData) return;
+            
+            statusMessage.innerHTML = '<span class="loading"></span> Procesando imagen con OCR...';
+            processBtn.disabled = true;
+            
+            try {
+                // Usar Tesseract.js para OCR
+                const { data: { text } } = await Tesseract.recognize(
+                    capturedImageData,
+                    'eng', // Solo inglés para mejor rendimiento
+                    { 
+                        logger: m => console.log(m) 
+                    }
+                );
+                
+                // Procesar el texto extraído
+                processExtractedText(text);
+                
+            } catch (error) {
+                console.error('Error en OCR:', error);
+                statusMessage.textContent = '❌ Error al procesar la imagen. Intenta de nuevo con una imagen más clara.';
+                processBtn.disabled = false;
+                showMessage('❌ Error en el procesamiento OCR', 'error');
+            }
+        });
+        
+        // Procesar el texto extraído por OCR
+        function processExtractedText(text) {
+            console.log("Texto extraído por OCR:", text);
+            
+            // Buscar patrones comunes de números de orden
+            const orderMatch = text.match(/(orden|order|#|número|num|no\.?)\s*:?\s*([A-Z0-9\-]+)/i);
+            const dateMatch = text.match(/(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4})/);
+            const totalMatch = text.match(/(total|total:)\s*\$?\s*(\d+[.,]\d+)/i);
+            
+            // Extraer número de orden
+            let orderNumber = "No detectado";
+            if (orderMatch && orderMatch[2]) {
+                orderNumber = orderMatch[2];
+            } else {
+                // Buscar cualquier cadena que parezca un número de orden
+                const potentialOrder = text.match(/([A-Z]{2,}\d{4,}|[A-Z]+\-\d+|ORDEN\s*\d+)/i);
+                if (potentialOrder) {
+                    orderNumber = potentialOrder[0];
+                }
+            }
+            
+            // Extraer fecha
+            let date = "No detectada";
+            if (dateMatch) {
+                date = dateMatch[0];
+            }
+            
+            // Extraer total
+            let total = "No detectado";
+            if (totalMatch && totalMatch[2]) {
+                total = "$" + totalMatch[2];
+            }
+            
+            // Actualizar la interfaz
+            statusMessage.innerHTML = `<strong>${orderNumber}</strong>`;
+            orderNumberField.textContent = orderNumber;
+            dateField.textContent = date;
+            totalField.textContent = total;
+            
+            showMessage('✅ Procesamiento completado', 'success');
+        }
+        
+        // Reiniciar
+        resetBtn.addEventListener('click', () => {
+            capturedImageContainer.style.display = 'none';
+            capturedImageData = null;
+            statusMessage.textContent = 'Cámara lista. Apunta al número de orden y haz clic en "Capturar Imagen"';
+            orderNumberField.textContent = '-';
+            dateField.textContent = '-';
+            totalField.textContent = '-';
+            processBtn.disabled = true;
+            resetBtn.disabled = true;
+        });
+        
+        // Detener la cámara al salir de la página
+        window.addEventListener('beforeunload', () => {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+            }
+        });
+        
+        // Prevenir comportamientos no deseados en móviles
+        document.addEventListener('touchstart', function(e) {
+            if (e.touches.length > 1) {
+                e.preventDefault();
+            }
+        }, { passive: false });
+        
+        console.log("Aplicación cargada. Usa el botón 'Activar Cámara' para comenzar.");
+    </script>
 </body>
 </html>
